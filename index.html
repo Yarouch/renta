@@ -239,6 +239,19 @@ input[type=range]::-webkit-slider-thumb:hover{box-shadow:0 0 0 6px rgba(201,169,
 .sp-interp{font-size:11px;color:var(--txt2);flex:1;}
 .sp-action{font-size:10px;color:var(--txt3);padding-left:21px;margin-top:1px;}
 
+
+/* S3 SCENARIO CARDS */
+.s3-scen-wrap{margin-bottom:10px;}
+.s3-scen-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.s3-scen-cards{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;}
+.s3-scen-card{background:var(--card2);border:1px solid var(--bord2);border-radius:var(--r);padding:9px 10px;cursor:pointer;transition:all .2s;text-align:center;position:relative;}
+.s3-scen-card:hover:not(.active){background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.16);}
+.s3-scen-card.active{border-color:var(--sc-col, var(--gold));background:rgba(255,255,255,.03);}
+.s3-scen-lbl{font-size:9px;color:var(--txt3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;line-height:1.3;}
+.s3-scen-val{font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:300;line-height:1.1;margin-bottom:3px;}
+.s3-scen-prob{font-size:10px;color:var(--txt3);}
+.s3-scen-tag{position:absolute;top:-8px;left:50%;transform:translateX(-50%);font-size:9px;padding:2px 8px;border-radius:10px;white-space:nowrap;font-weight:500;}
+
 /* TOOLTIP ICON */
 .tip{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;border:1px solid var(--txt3);color:var(--txt3);font-size:9px;cursor:default;font-style:normal;vertical-align:middle;margin-left:5px;flex-shrink:0;transition:border-color .15s,color .15s;user-select:none;}
 .tip:hover{border-color:var(--gold);color:var(--gold);}
@@ -458,13 +471,14 @@ input[type=range]::-webkit-slider-thumb:hover{box-shadow:0 0 0 6px rgba(201,169,
       <!-- Footer: success bands + what-if slider -->
       <div class="s3-fan-footer">
 
-        <!-- What-if slider FIRST (closest to chart) -->
-        <div style="padding:0 2px;">
-          <div class="flabel" style="margin-bottom:6px;">
-            Cílová renta (what-if)
-            <span class="fval" id="s3-renta-val" style="font-size:14px;">—</span>
+        <!-- Scenario cards (replaces what-if slider) -->
+        <div class="s3-scen-wrap">
+          <div class="s3-scen-hd">
+            <div class="sec-hd" style="margin-bottom:0;">Při jaké jistotě? <i class="tip" data-tip="Klikni na scénář – fan chart a KPI se okamžitě aktualizují. Renta je odvozena z Monte Carlo distribuce finálního portfolia. Doporučeno: 70 % (konzervativní dolní mez spolehlivosti).">i</i></div>
           </div>
-          <input type="range" id="s3-renta" min="5000" max="200000" value="50000" step="1000" oninput="s3RentaChange(this.value)">
+          <div class="s3-scen-cards" id="s3-scen-cards">
+            <!-- rendered by renderScenCards() -->
+          </div>
         </div>
 
         <!-- Success meter + bands -->
@@ -547,7 +561,7 @@ const AT = {
 const SCEN = [
   {name:'Konzervativní', ret:0.03, vol:0.05, col:'#6B9FD4'},
   {name:'Vyvážený',      ret:0.05, vol:0.12, col:'#C9A96E'},
-  {name:'Dynamický',     ret:0.9,  vol:0.20, col:'#D96B6B'},
+  {name:'Dynamický',     ret:0.10, vol:0.20, col:'#D96B6B'},  // opraveno z 0.9
 ];
 
 // ── FORMAT ───────────────────────────────────────────────────
@@ -572,8 +586,11 @@ function calcTarget(renta) {
   const ra = renta * 12;
   if (S.cil.rezim === 'kapital') return ra / 0.04;
   const yrs = S.cil.delka === 'fixni' ? Math.max(1, S.cil.vekK - S.cil.vekP) : Math.max(1, 85 - S.cil.vekP);
-  const r = 0.02;
-  return ra * (1 - Math.pow(1+r, -yrs)) / r;
+  // Přesný měsíční anuitní vzorec
+  const rA = 0.02;
+  const rM = Math.pow(1 + rA, 1/12) - 1;
+  const nM = yrs * 12;
+  return renta * (1 - Math.pow(1 + rM, -nM)) / rM;
 }
 function calcHorizont() { return Math.max(1, S.cil.vekP - S.cil.vek); }
 function calcNW() {
@@ -595,10 +612,11 @@ function assetStratPreset(type, idx) {
 
 // DPS state contribution (2025 rules, same as InvestCalc)
 function dpsStateContrib(monthly) {
+  // Pravidla 2025: 20 % z vkladu klienta, nárok od 500 Kč/měs, max 340 Kč/měs
   const m = Math.max(0, monthly);
-  if (m < 500) return 0;
+  if (m < 500)  return 0;
   if (m >= 1700) return 340;
-  return Math.round((m - 500) / 1200 * 340);
+  return Math.round(m * 0.20);
 }
 
 // Total monthly cash-flow for an asset (own + employer + state)
@@ -608,14 +626,15 @@ function getAssetMonthly(a) {
   return m;
 }
 
-// FV of a single asset using its own ret/vol params
+// FV of a single asset – nominální měsíční sazba r/12
+// (stejná konvence jako InvestCalc: 5 % p.a. → 0,4167 %/měs)
 function calcAssetFV(a, h) {
   h = (h !== undefined) ? h : calcHorizont();
   const r  = (a.ret || 5) / 100;
-  const rm = Math.pow(1 + r, 1/12) - 1;
+  const rm = r / 12;          // nominální: r ÷ 12 (ne geometrická konverze)
   const n  = h * 12;
   const monthly = getAssetMonthly(a);
-  const fvLump    = a.val * Math.pow(1 + r, h);
+  const fvLump    = a.val * Math.pow(1 + rm, n);   // konzistentní s rm
   const fvAnnuity = monthly > 0 && rm > 0
     ? monthly * (Math.pow(1 + rm, n) - 1) / rm
     : monthly * n;
@@ -629,8 +648,11 @@ function calcAchievableRenta(fvOverride) {
   const yrs = S.cil.delka === 'fixni'
     ? Math.max(1, S.cil.vekK - S.cil.vekP)
     : Math.max(1, 85 - S.cil.vekP);
-  const r = 0.02;
-  return fv * r / (1 - Math.pow(1 + r, -yrs)) / 12;
+  // Přesný měsíční anuitní vzorec (místo roční/12 aproximace)
+  const rA = 0.02;
+  const rM = Math.pow(1 + rA, 1/12) - 1;   // měsíční ekvivalent
+  const nM = yrs * 12;                        // počet měsíců
+  return fv * rM / (1 - Math.pow(1 + rM, -nM));
 }
 
 function calcFV(r, h) {
@@ -643,7 +665,7 @@ function calcMonthly(target, r) {
   const fv  = calcFV();
   const gap = Math.max(0, target - fv);
   if (gap === 0) return 0;
-  const rm = Math.pow(1 + r, 1/12) - 1;
+  const rm = r / 12;          // nominální: r ÷ 12 (konzistentní s calcAssetFV)
   const n  = calcHorizont() * 12;
   return gap * rm / (Math.pow(1 + rm, n) - 1);
 }
@@ -1195,65 +1217,126 @@ function rmLiab(id) {
 let fanChart = null;
 let mcTimer  = null;
 
-// Aggregated Monte Carlo – simulates each liquid asset independently, sums paths
+// ── KORELAČNÍ MATICE (typ aktiva × typ aktiva) ────────────────
+// Hodnoty odrážejí historické korelace výnosů v CZK portfoliu.
+// Zdroj: kombinace akademické literatury a empirických odhadů.
+const CORR_TYPES = {
+  investment:  {investment:1.00, pension:0.40, cash:0.10, real_estate:0.30, crypto:0.50, business:0.50},
+  pension:     {investment:0.40, pension:1.00, cash:0.10, real_estate:0.20, crypto:0.20, business:0.30},
+  cash:        {investment:0.10, pension:0.10, cash:1.00, real_estate:0.05, crypto:0.05, business:0.10},
+  real_estate: {investment:0.30, pension:0.20, cash:0.05, real_estate:1.00, crypto:0.15, business:0.40},
+  crypto:      {investment:0.50, pension:0.20, cash:0.05, real_estate:0.15, crypto:1.00, business:0.25},
+  business:    {investment:0.50, pension:0.30, cash:0.10, real_estate:0.40, crypto:0.25, business:1.00},
+};
+
+function getCorr(t1, t2) {
+  if (t1 === t2) return 1.0;
+  const row = CORR_TYPES[t1] || CORR_TYPES.investment;
+  return (row[t2] !== undefined) ? row[t2] : 0.30;
+}
+
+// Choleského rozklad: vrátí dolní trojúhelníkovou matici L,
+// kde L × Lᵀ = C (korelační matice)
+function cholesky(C) {
+  const n = C.length;
+  const L = Array.from({length:n}, () => new Array(n).fill(0));
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j <= i; j++) {
+      let s = 0;
+      for (let k = 0; k < j; k++) s += L[i][k] * L[j][k];
+      if (i === j) {
+        L[i][j] = Math.sqrt(Math.max(0, C[i][i] - s));
+      } else {
+        L[i][j] = L[j][j] > 1e-10 ? (C[i][j] - s) / L[j][j] : 0;
+      }
+    }
+  }
+  return L;
+}
+
+// Generuje n korelovaných N(0,1) proměnných z Choleského faktoru L.
+// Algoritmus: w = L × z, kde z jsou nezávislé standardní normály.
+function corrNormals(L) {
+  const n = L.length;
+  const z = Array.from({length:n}, randn);
+  return L.map((row, i) =>
+    row.slice(0, i + 1).reduce((s, lij, j) => s + lij * z[j], 0)
+  );
+}
+
+// Monte Carlo s korelovanými aktivy (Choleského rozklad)
 function mcAggregated(N, rentaOverride) {
   const liq    = S.maj.akt.filter(a => a.liquid);
+  const n      = liq.length;
   const h      = calcHorizont();
   const target = calcTarget(rentaOverride);
-  N = N || 350;
+  N = N || 1000;
+
+  if (n === 0) return { sr: 0, pct: {p5:[],p25:[],p50:[],p75:[],p95:[]}, target, h };
+
+  // Sestav korelační matici a Choleského faktor — jednou před simulací
+  const C = liq.map((a, i) => liq.map((b, j) => getCorr(a.type, b.type)));
+  const L = cholesky(C);
+
+  // Předpočítej měsíční parametry per aktivum
+  const params = liq.map(a => ({
+    rm: Math.pow(1 + (a.ret || 5) / 100, 1/12) - 1,
+    vm: ((a.vol || 10) / 100) / Math.sqrt(12),
+    m:  getAssetMonthly(a),
+    v0: a.val,
+  }));
 
   const paths = [];
   let ok = 0;
 
   for (let i = 0; i < N; i++) {
-    const pathTotal = new Array(h + 1).fill(0);
-    // initial combined value
-    liq.forEach(a => { pathTotal[0] += a.val; });
+    // Zůstatky per aktivum (resetuj pro každou simulaci)
+    const bal = params.map(p => p.v0);
 
-    for (const a of liq) {
-      const r   = (a.ret || 5) / 100;
-      const vol = (a.vol || 10) / 100;
-      const rm  = Math.pow(1 + r, 1/12) - 1;
-      const vm  = vol / Math.sqrt(12);
-      const m   = getAssetMonthly(a);
+    const pathTotal = [bal.reduce((s, v) => s + v, 0)];
 
-      let p = a.val;
-      for (let y = 1; y <= h; y++) {
-        for (let mo = 0; mo < 12; mo++) {
-          p = Math.max(0, p * (1 + rm + vm * randn()) + m);
+    for (let y = 0; y < h; y++) {
+      for (let mo = 0; mo < 12; mo++) {
+        // Jeden vektor korelovaných šoků pro všechna aktiva najednou
+        const w = corrNormals(L);
+        for (let ai = 0; ai < n; ai++) {
+          const {rm, vm, m} = params[ai];
+          bal[ai] = Math.max(0, bal[ai] * (1 + rm + vm * w[ai]) + m);
         }
-        pathTotal[y] += p;
       }
+      pathTotal.push(bal.reduce((s, v) => s + v, 0));
     }
 
-    paths.push([...pathTotal]);
+    paths.push(pathTotal);
     if (pathTotal[h] >= target) ok++;
   }
 
   const pct = {p5:[],p25:[],p50:[],p75:[],p95:[]};
   for (let y = 0; y <= h; y++) {
-    const v = paths.map(p => p[y]).sort((a,b) => a - b);
-    const n = v.length;
-    pct.p5.push( v[Math.floor(n*.05)] || 0);
-    pct.p25.push(v[Math.floor(n*.25)] || 0);
-    pct.p50.push(v[Math.floor(n*.50)] || 0);
-    pct.p75.push(v[Math.floor(n*.75)] || 0);
-    pct.p95.push(v[Math.floor(n*.95)] || 0);
+    const v = paths.map(p => p[y]).sort((a, b) => a - b);
+    const nn = v.length;
+    pct.p5.push( v[Math.floor(nn * .05)] || 0);
+    pct.p25.push(v[Math.floor(nn * .25)] || 0);
+    pct.p50.push(v[Math.floor(nn * .50)] || 0);
+    pct.p75.push(v[Math.floor(nn * .75)] || 0);
+    pct.p95.push(v[Math.floor(nn * .95)] || 0);
   }
 
-  return { sr: ok / N, pct, target, h };
+  // Percentiles of final portfolio value for scenario cards
+  const finalSorted = paths.map(p => p[h]).sort((a, b) => a - b);
+  const nf = finalSorted.length;
+  const scenFVs = [50, 60, 70, 80].map(prob => {
+    const idx = Math.max(0, Math.min(nf - 1, Math.floor(nf * (100 - prob) / 100)));
+    return finalSorted[idx] || 0;
+  });
+
+  return { sr: ok / N, pct, target, h, scenFVs };
 }
 
 function initS3() {
   if (fanChart) { fanChart.destroy(); fanChart = null; }
-  document.getElementById('s3-renta').value = S.cil.renta;
-  s3RentaChange(S.cil.renta, false);
+  cachedMC = null; cachedScens = null;
   runRenderMC();
-}
-
-function s3RentaChange(v, run=true) {
-  document.getElementById('s3-renta-val').textContent = Math.round(+v).toLocaleString('cs-CZ') + ' Kč/měs';
-  if (run) { clearTimeout(mcTimer); mcTimer = setTimeout(runRenderMC, 220); }
 }
 
 function renderS3KPI(rentaVal) {
@@ -1340,17 +1423,86 @@ function renderS3Breakdown() {
        </div>`;
 }
 
+// ── SCENARIO STATE ───────────────────────────────────────────
+let activeScenIdx = 3;  // default: 70 % (index 3 in 5 cards)
+let cachedMC      = null;
+let cachedScens   = null;
+
+function buildScenarios(res) {
+  const achievable  = calcAchievableRenta(calcFV());
+  const currentProb = Math.round(res.sr * 100);
+  const probDefs    = [
+    {prob:50, tag:'',               col:'#D4A254'},
+    {prob:60, tag:'',               col:'#D4A254'},
+    {prob:70, tag:'Doporučeno',     col:'var(--green)'},
+    {prob:80, tag:'Konzervativní',  col:'var(--blue)'},
+  ];
+  const current = {
+    label:'Stávající plán', renta:achievable, prob:currentProb,
+    tag:'', col: currentProb >= 70 ? 'var(--green)' : 'var(--gold)',
+  };
+  const probScens = probDefs.map((d, i) => ({
+    label: d.prob + ' % jistota', renta: calcAchievableRenta(res.scenFVs[i]),
+    prob: d.prob, tag: d.tag, col: d.col,
+  }));
+  return [current, ...probScens];
+}
+
+function renderScenCards(scens) {
+  const el = document.getElementById('s3-scen-cards');
+  if (!el) return;
+  el.innerHTML = scens.map((sc, i) => {
+    const isActive = i === activeScenIdx;
+    const tagHTML  = sc.tag
+      ? `<div class="s3-scen-tag" style="background:${sc.col === 'var(--green)'?'rgba(76,175,138,.18)':sc.col === 'var(--blue)'?'rgba(107,159,212,.18)':'rgba(212,162,84,.18)'};color:${sc.col};">${sc.tag}</div>`
+      : '';
+    return `<div class="s3-scen-card${isActive?' active':''}" style="--sc-col:${sc.col}" onclick="selectScenCard(${i})">
+      ${tagHTML}
+      <div class="s3-scen-lbl">${sc.label}</div>
+      <div class="s3-scen-val" style="color:${sc.col}">${czk(sc.renta)}<span style="font-family:'Outfit',sans-serif;font-size:10px;color:var(--txt3);">/měs</span></div>
+      <div class="s3-scen-prob">${sc.prob} % jistota</div>
+    </div>`;
+  }).join('');
+}
+
+function selectScenCard(idx) {
+  activeScenIdx = idx;
+  if (!cachedScens || !cachedMC) return;
+  document.querySelectorAll('.s3-scen-card').forEach((c, i) => c.classList.toggle('active', i === idx));
+  const sc = cachedScens[idx];
+  const tgt = calcTarget(sc.renta);
+  // Update fan target line instantly (no full re-render)
+  if (fanChart) {
+    fanChart.data.datasets[5].data = Array(cachedMC.h + 1).fill(tgt);
+    fanChart.update('none');
+  }
+  // Update KPI
+  renderS3KPI(sc.renta);
+  // Update success meter
+  const spEl = document.getElementById('sp-val');
+  spEl.textContent = sc.prob + ' %';
+  spEl.style.color = sc.prob>=80?'#4CAF8A':sc.prob>=60?'#C9A96E':'#D96B6B';
+  updateSpBands(sc.prob);
+}
+
 function runRenderMC() {
-  const rentaVal = +document.getElementById('s3-renta').value;
-  renderS3KPI(rentaVal);
   renderS3Breakdown();
-  const res  = mcAggregated(1000, rentaVal);
-  const sp   = Math.round(res.sr * 100);
+  const base = calcAchievableRenta(calcFV());
+  const res  = mcAggregated(1000, base);
+  cachedMC   = res;
+  const scens = buildScenarios(res);
+  cachedScens = scens;
+  renderScenCards(scens);
+  // Apply active scenario
+  const sc  = scens[activeScenIdx];
+  const tgt = calcTarget(sc.renta);
+  renderS3KPI(sc.renta);
+  const sp  = sc.prob;
   const spEl = document.getElementById('sp-val');
   spEl.textContent = sp + ' %';
   spEl.style.color = sp>=80?'#4CAF8A':sp>=60?'#C9A96E':'#D96B6B';
   updateSpBands(sp);
-  renderFan(res);
+  renderFan({...res, target: tgt});
 }
 
 function updateSpBands(sp) {
