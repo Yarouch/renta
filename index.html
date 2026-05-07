@@ -1344,7 +1344,7 @@ function runRenderMC() {
   const rentaVal = +document.getElementById('s3-renta').value;
   renderS3KPI(rentaVal);
   renderS3Breakdown();
-  const res  = mcAggregated(350, rentaVal);
+  const res  = mcAggregated(1000, rentaVal);
   const sp   = Math.round(res.sr * 100);
   const spEl = document.getElementById('sp-val');
   spEl.textContent = sp + ' %';
