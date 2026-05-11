@@ -1376,7 +1376,7 @@ function mcAggregated(N, rentaOverride) {
         const w = corrNormals(L);
         for (let ai = 0; ai < n; ai++) {
           const {rm, vm, m} = params[ai];
-          bal[ai] = Math.max(0, bal[ai] * (1 + rm + vm * w[ai]) + m);
+          bal[ai] = Math.max(0, bal[ai] * Math.exp((rm - 0.5 * vm * vm) + vm * w[ai]) + m);
         }
       }
       pathTotal.push(bal.reduce((s, v) => s + v, 0));
