@@ -690,7 +690,7 @@ function getAssetMonthly(a) {
 function calcAssetFV(a, h) {
   h = (h !== undefined) ? h : calcHorizont();
   const r  = (a.ret || 5) / 100;
-  const rm = r / 12;          // nominální: r ÷ 12 (ne geometrická konverze)
+  const rm = Math.pow(1 + r, 1/12) - 1;
   const n  = h * 12;
   const monthly = getAssetMonthly(a);
   const fvLump    = a.val * Math.pow(1 + rm, n);   // konzistentní s rm
@@ -724,7 +724,7 @@ function calcMonthly(target, r) {
   const fv  = calcFV();
   const gap = Math.max(0, target - fv);
   if (gap === 0) return 0;
-  const rm = r / 12;          // nominální: r ÷ 12 (konzistentní s calcAssetFV)
+  const rm = Math.pow(1 + r, 1/12) - 1;
   const n  = calcHorizont() * 12;
   return gap * rm / (Math.pow(1 + rm, n) - 1);
 }
