@@ -731,10 +731,36 @@ function calcMonthly(target, r) {
 
 // ── MONTE CARLO ──────────────────────────────────────────────
 function randn() {
-  let u=0,v=0;
+  // Box-Muller — zachováno pro interní použití
+  let u=0, v=0;
   while(!u) u=Math.random();
   while(!v) v=Math.random();
-  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+  return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+
+// Stupně volnosti pro t-rozdělení.
+// ν = 5 odpovídá empirickým datům akciových trhů (fat tails).
+// Snižování ν → silnější ocasy (ν = 3 vhodné pro krypto).
+// Zvyšování ν → blíží se normálnímu rozdělení (ν > 30 ≈ Gauss).
+const T_NU = 5;
+
+// t(ν) = Z / √(χ²(ν)/ν)
+// Z ~ N(0,1), χ²(ν) = součet ν nezávislých čtverců N(0,1)
+function randT(nu) {
+  const z = randn();
+  let chiSq = 0;
+  for (let i = 0; i < nu; i++) { const r = randn(); chiSq += r * r; }
+  return z / Math.sqrt(chiSq / nu);
+}
+
+const T_NU = 5; // stupně volnosti — empiricky ověřeno pro akciová portfolia
+
+function randT(nu) {
+  // t(ν) = Z / √(χ²(ν)/ν), kde Z ~ N(0,1) a χ²(ν) = součet ν čtverců N(0,1)
+  const z   = randn();
+  let chiSq = 0;
+  for (let i = 0; i < nu; i++) { const r = randn(); chiSq += r * r; }
+  return z / Math.sqrt(chiSq / nu);
 }
 
 function mc(scIdx, rentaVal, N) {
@@ -1317,7 +1343,7 @@ function cholesky(C) {
 // Algoritmus: w = L × z, kde z jsou nezávislé standardní normály.
 function corrNormals(L) {
   const n = L.length;
-  const z = Array.from({length:n}, randn);
+  const z = Array.from({length:n}, () => randT(T_NU));
   return L.map((row, i) =>
     row.slice(0, i + 1).reduce((s, lij, j) => s + lij * z[j], 0)
   );
