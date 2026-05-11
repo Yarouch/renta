@@ -1717,8 +1717,10 @@ function renderS3Breakdown() {
   if (!el) return;
   const sCols = ['var(--blue)','var(--gold)','var(--red)'];
 
-  let totalFV  = 0;
-  let totalMes = 0;
+let totalFV     = 0;
+let totalMes    = 0;
+let totalContrib = 0;
+const h = calcHorizont();
 
   const rows = liq.map(a => {
     const fv  = calcAssetFV(a);
@@ -1727,8 +1729,9 @@ function renderS3Breakdown() {
     const scC = sCols[sc];
     const m   = getAssetMonthly(a);
     const ret = (typeof a.ret === 'number' ? a.ret : 5).toFixed(1);
-    totalFV  += fv;
-    totalMes += (a.monthly || 0);
+    totalFV     += fv;
+    totalMes    += (a.monthly || 0);
+    totalContrib += a.val + getAssetMonthly(a) * h * 12;
     const stateAdd = a.type === 'pension' ? dpsStateContrib(a.monthly||0) + (a.employer||0) : 0;
     const mesStr = fmtNum(a.monthly||0) + (stateAdd > 0
       ? `<span style="color:var(--green);font-size:9px;"> +${fmtNum(stateAdd)}</span>`
@@ -1750,8 +1753,40 @@ function renderS3Breakdown() {
 
   const achievable = calcAchievableRenta(totalFV);
 
-  el.innerHTML = rows.join('')
-    + `<div class="bdw-total">
+  const totalGrowth  = Math.max(0, totalFV - totalContrib);
+const contribPct   = totalFV > 0 ? (totalContrib / totalFV * 100) : 50;
+const growthPct    = 100 - contribPct;
+const multiplier   = totalContrib > 0 ? (totalFV / totalContrib) : 1;
+
+el.innerHTML = rows.join('')
+  + `<div class="bdw-total">
+       <span style="font-size:10px;color:var(--txt3);">Celkem</span>
+       <span style="font-size:11px;color:var(--txt2);text-align:right;">${fmtNum(totalMes)}</span>
+       <span></span>
+       <span style="font-family:'Cormorant Garamond',serif;font-size:15px;color:var(--gold);text-align:right;">${czk(totalFV)}</span>
+     </div>
+
+     <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--bord);">
+       <div style="font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Vklady vs. výnos trhů</div>
+
+       <div style="height:7px;border-radius:4px;overflow:hidden;display:flex;margin-bottom:10px;">
+         <div style="width:${contribPct.toFixed(1)}%;background:var(--blue);transition:width .5s;"></div>
+         <div style="width:${growthPct.toFixed(1)}%;background:var(--gold);transition:width .5s;"></div>
+       </div>
+
+       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+         <div style="background:rgba(107,159,212,0.07);border:1px solid rgba(107,159,212,0.2);border-radius:8px;padding:8px 10px;">
+           <div style="font-size:9px;color:var(--blue);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;">Vloženo celkem</div>
+           <div style="font-family:'Cormorant Garamond',serif;font-size:15px;color:var(--txt);">${czk(totalContrib)}</div>
+           <div style="font-size:9px;color:var(--txt3);margin-top:2px;">${Math.round(contribPct)} % výsledku</div>
+         </div>
+         <div style="background:rgba(201,169,110,0.07);border:1px solid rgba(201,169,110,0.2);border-radius:8px;padding:8px 10px;">
+           <div style="font-size:9px;color:var(--gold);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;">Výnos trhů</div>
+           <div style="font-family:'Cormorant Garamond',serif;font-size:15px;color:var(--gold);">${czk(totalGrowth)}</div>
+           <div style="font-size:9px;color:var(--txt3);margin-top:2px;">trhy přidaly ${multiplier.toFixed(1)}×</div>
+         </div>
+       </div>
+     </div>`;
          <span style="font-size:10px;color:var(--txt3);">Celkem</span>
          <span style="font-size:11px;color:var(--txt2);text-align:right;">${fmtNum(totalMes)}</span>
          <span></span>
