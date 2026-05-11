@@ -755,14 +755,6 @@ function randT(nu) {
 
 const T_NU = 5; // stupně volnosti — empiricky ověřeno pro akciová portfolia
 
-function randT(nu) {
-  // t(ν) = Z / √(χ²(ν)/ν), kde Z ~ N(0,1) a χ²(ν) = součet ν čtverců N(0,1)
-  const z   = randn();
-  let chiSq = 0;
-  for (let i = 0; i < nu; i++) { const r = randn(); chiSq += r * r; }
-  return z / Math.sqrt(chiSq / nu);
-}
-
 function mc(scIdx, rentaVal, N) {
   const sc = SCEN[scIdx];
   const target = calcTarget(rentaVal);
