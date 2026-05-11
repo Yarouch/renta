@@ -206,7 +206,9 @@ input[type=range]::-webkit-slider-thumb:hover{box-shadow:0 0 0 6px rgba(201,169,
 
 /* SCREEN 3 KPI BAR */
 #screen3{flex-direction:column;}
-.s3-kpi-bar{display:grid;grid-template-columns:1.6fr 1.6fr 1fr 1fr;gap:10px;padding:14px 24px 10px;border-bottom:1px solid var(--bord);flex-shrink:0;}
+.s3-kpi-bar{display:grid;grid-template-columns:1.6fr 1.6fr 1fr 1fr 1fr;gap:10px;padding:14px 24px 10px;border-bottom:1px solid var(--bord);flex-shrink:0;}
+.s3-kpi.gold-tile{border-color:rgba(201,169,110,0.3);background:rgba(201,169,110,0.06);}
+.s3-kpi.gold-tile .val{font-size:26px;}
 .s3-kpi{background:var(--card);border:1px solid var(--bord);border-radius:var(--r);padding:11px 14px;}
 .s3-kpi .lbl{font-size:10px;color:var(--txt3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;}
 .s3-kpi .val{font-family:'Cormorant Garamond',serif;font-size:21px;font-weight:400;}
@@ -1410,9 +1412,13 @@ function mcAggregated(N, rentaOverride) {
 
 function generatePDF() {
   const h          = calcHorizont();
-  const liq        = S.maj.akt.filter(a => a.liquid);
-  const totalFV    = calcFV();
-  const achievable = calcAchievableRenta(totalFV);
+  const liq          = S.maj.akt.filter(a => a.liquid);
+const totalFV      = calcFV();
+const achievable   = calcAchievableRenta(totalFV);
+const h            = calcHorizont();
+const totalContrib = liq.reduce((s, a) => s + a.val + getAssetMonthly(a) * h * 12, 0);
+const multiplier   = totalContrib > 0 ? totalFV / totalContrib : 1;
+const totalGrowth  = Math.max(0, totalFV - totalContrib);
   const goalRenta  = S.cil.renta;
   const goalTarget = calcTarget(goalRenta);
   const addMo      = calcMonthly(goalTarget, S.cil.zhodnoceni);
@@ -1700,10 +1706,15 @@ function renderS3KPI(rentaVal) {
       val: czk(totalFV),
       sub: calcHorizont() + ' let · ' + liq.length + ' aktiv',
       col: 'var(--txt)' },
+    { lbl: 'Trhy přidají',
+      val: multiplier.toFixed(1) + '×',
+      sub: '+ ' + czk(totalGrowth),
+      col: 'var(--gold)',
+      gold: true },
   ];
 
   document.getElementById('s3-kpi-bar').innerHTML = tiles.map(t =>
-    `<div class="s3-kpi${t.highlight?' highlight':''}">
+    `<div class="s3-kpi${t.highlight?' highlight':t.gold?' gold-tile':''}">
        <div class="lbl">${t.lbl}</div>
        <div class="val" style="color:${t.col}">${t.val}</div>
        <div class="sub">${t.sub||''}</div>
