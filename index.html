@@ -562,6 +562,52 @@ const AT = {
   business:    {lbl:'Podnikání',   col:'#D47D6B', ic:'🏢'},
 };
 
+// ── STRATEGICKÁ ALOKACE ──────────────────────────────────────
+// Zdroj: historická data 1990–2024 (Dimson/Marsh/Staunton, MSCI,
+// Bloomberg Barclays). Parametry jsou forward-looking, konzervativní.
+const ASSET_CLASSES = {
+  akcie:       { mu: 0.070, sigma: 0.160 }, // MSCI World
+  dluhopisy:   { mu: 0.035, sigma: 0.050 }, // EUR Investment Grade
+  cash:        { mu: 0.025, sigma: 0.005 }, // Money market / vklady
+  nemovitosti: { mu: 0.055, sigma: 0.120 }, // REITs / nem. fondy
+};
+// Korelační matice tříd aktiv [akcie, dluhopisy, cash, nemovitosti]
+const AC_CORR = [
+  [ 1.00, -0.15,  0.00,  0.55],
+  [-0.15,  1.00,  0.30,  0.10],
+  [ 0.00,  0.30,  1.00,  0.05],
+  [ 0.55,  0.10,  0.05,  1.00],
+];
+// Váhy tříd aktiv per strategie
+const STRATEGY_ALLOCATION = {
+  conservative: { akcie: 0.20, dluhopisy: 0.65, cash: 0.10, nemovitosti: 0.05 },
+  balanced:     { akcie: 0.50, dluhopisy: 0.35, cash: 0.05, nemovitosti: 0.10 },
+  dynamic:      { akcie: 0.75, dluhopisy: 0.15, cash: 0.05, nemovitosti: 0.05 },
+};
+// Výpočet portfoliového μ a σ z vah + korelační matice
+// σ²_p = Σᵢ Σⱼ wᵢ wⱼ σᵢ σⱼ ρᵢⱼ
+function deriveStrategyParams(alloc) {
+  const keys = ['akcie','dluhopisy','cash','nemovitosti'];
+  const w    = keys.map(k => alloc[k]);
+  const mu   = keys.map(k => ASSET_CLASSES[k].mu);
+  const sig  = keys.map(k => ASSET_CLASSES[k].sigma);
+  const portfolioMu = w.reduce((s, wi, i) => s + wi * mu[i], 0);
+  let variance = 0;
+  for (let i = 0; i < 4; i++)
+    for (let j = 0; j < 4; j++)
+      variance += w[i] * w[j] * sig[i] * sig[j] * AC_CORR[i][j];
+  return { mu: portfolioMu, sigma: Math.sqrt(variance) };
+}
+// Předpočítané hodnoty — výsledek:
+// conservative → { mu: 4.2 %, sigma: 4.5 % }
+// balanced     → { mu: 5.4 %, sigma: 8.7 % }
+// dynamic      → { mu: 6.2 %, sigma: 12.3 % }
+const STRATEGY_PARAMS = {
+  conservative: deriveStrategyParams(STRATEGY_ALLOCATION.conservative),
+  balanced:     deriveStrategyParams(STRATEGY_ALLOCATION.balanced),
+  dynamic:      deriveStrategyParams(STRATEGY_ALLOCATION.dynamic),
+};  
+  
 // ── SCENARIOS ────────────────────────────────────────────────
 const SCEN = [
   {name:'Konzervativní', ret:0.03, vol:0.05, col:'#6B9FD4'},
@@ -603,8 +649,16 @@ function calcNW() {
 }
 // Per-asset strategy presets [ret%, vol%] × 3 strategies
 const ASSET_STRAT = {
-  investment:  [[3,4],[5,12],[8,20]],
-  pension:     [[3,4],[5,12],[8,20]],
+    investment:  [
+    [+(STRATEGY_PARAMS.conservative.mu*100).toFixed(1), +(STRATEGY_PARAMS.conservative.sigma*100).toFixed(1)],
+    [+(STRATEGY_PARAMS.balanced.mu*100).toFixed(1),     +(STRATEGY_PARAMS.balanced.sigma*100).toFixed(1)],
+    [+(STRATEGY_PARAMS.dynamic.mu*100).toFixed(1),      +(STRATEGY_PARAMS.dynamic.sigma*100).toFixed(1)],
+  ],
+  pension:  [
+    [+(STRATEGY_PARAMS.conservative.mu*100).toFixed(1), +(STRATEGY_PARAMS.conservative.sigma*100).toFixed(1)],
+    [+(STRATEGY_PARAMS.balanced.mu*100).toFixed(1),     +(STRATEGY_PARAMS.balanced.sigma*100).toFixed(1)],
+    [+(STRATEGY_PARAMS.dynamic.mu*100).toFixed(1),      +(STRATEGY_PARAMS.dynamic.sigma*100).toFixed(1)],
+  ],
   cash:        [[2,0.5],[3,1],[4.5,3]],
   real_estate: [[3,4],[5,7],[7,13]],
   crypto:      [[8,35],[15,55],[25,80]],
